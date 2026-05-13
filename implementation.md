@@ -219,3 +219,62 @@ pyproject.toml → __init__.py → config.py
 ```
 
 Varje lager bygger på ett redan fungerande lager under. Affärslogiken kan testas utan CLI. CLI kan testas utan API.
+
+---
+
+## Del 3: Verifiering — är projektet körbart efter implementationen?
+
+**Ja.** Alla tre kommandon är verifierade både genom automatiska tester och manuell körning mot en riktig miljö.
+
+### Automatiska tester
+
+`pytest` kör **39 tester** som alla passerar:
+- 2 för `config`
+- 8 för `anonymize`
+- 8 för `deanonymize`
+- 7 för `explain` (med mockad Anthropic-klient)
+- 7 för `cli` (via Typers `CliRunner`)
+- 7 för `api` (via FastAPIs `TestClient`)
+
+### Manuell live-testning
+
+Testmaterialet var en SQL-fråga i `test.sql`:
+
+```sql
+SELECT k.kundnamn, SUM(o.belopp) AS total
+FROM kund k
+JOIN ordrar o ON o.kund_id = k.id
+WHERE o.datum >= '2025-01-01'
+GROUP BY k.kundnamn
+ORDER BY total DESC
+```
+
+**Steg 1 — `explain`:**
+Efter att ha lagt in `ANTHROPIC_API_KEY` i en lokal `.env`-fil kördes:
+
+```
+sql-anon explain test.sql
+```
+
+Claude returnerade en svensk förklaring av frågan i klartext. Verifierar att Anthropic API-integrationen, prompten och nyckelhanteringen fungerar end-to-end.
+
+**Steg 2 — `anonymize`:**
+
+```
+sql-anon anonymize test.sql
+```
+
+Resultatet skrevs till stdout med alla tabell-, kolumn- och aliasnamn ersatta av platshållare (`tabell_1`, `kolumn_1`, `alias_1` osv). En mappningsfil `test.sql.mapping.json` skapades automatiskt bredvid originalfilen.
+
+**Steg 3 — `deanonymize`:**
+Ett simulerat svar från en extern konsult lades i `svar.txt` (innehöll både kända platshållare och varianter på dem). Sedan kördes:
+
+```
+sql-anon deanonymize svar.txt test.sql.mapping.json
+```
+
+Alla platshållare byttes tillbaka till sina originalnamn korrekt. Den strikta felhanteringen fångar dessutom om svaret skulle innehålla en platshållare som inte finns i mappningen.
+
+### Slutsats
+
+Hela flödet — anonymisera lokalt → skicka iväg → ta emot svar → avanonymisera lokalt — fungerar som tänkt. Ingen SQL skickas till externa tjänster utanför `explain`-kommandot, vilket var en av kärnprinciperna i CLAUDE.md.
