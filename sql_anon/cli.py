@@ -10,7 +10,10 @@ from sql_anon.config import get_api_key
 from sql_anon.deanonymize import deanonymize as deanonymize_text
 from sql_anon.explain import explain as explain_sql
 
-# Läs in .env-fil från arbetskatalogen om den finns. Påverkar bara processen.
+# Konfiguration får läsas på CLI-nivå enligt CLAUDE.md ("All I/O sker i ett lager
+# – filläsning/skrivning (mappningsfiler, konfiguration) isoleras från affärslogiken").
+# load_dotenv läser .env från arbetskatalogen om den finns; affärslogiken läser
+# fortfarande bara från os.environ och vet inget om filen.
 load_dotenv()
 
 app = typer.Typer(help="Förklara, anonymisera och avanonymisera SQL-frågor.")
