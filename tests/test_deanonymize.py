@@ -44,9 +44,9 @@ def test_unknown_placeholder_lists_all_missing_in_error():
 
 def test_longer_placeholder_numbers_match_correctly():
     # kolumn_1 ska inte matcha början av kolumn_10
-    mapping = {"kolumn_1": "namn", "kolumn_10": "lon"}
+    mapping = {"kolumn_1": "kol_a", "kolumn_10": "kol_b"}
     result = deanonymize("SELECT kolumn_10 FROM x", mapping)
-    assert result == "SELECT lon FROM x"
+    assert result == "SELECT kol_b FROM x"
 
 
 def test_replaces_multiple_occurrences():
