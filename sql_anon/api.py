@@ -1,15 +1,21 @@
 import anthropic
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sql_anon.anonymize import anonymize as anonymize_sql
 from sql_anon.config import get_api_key
 from sql_anon.deanonymize import deanonymize as deanonymize_text
 from sql_anon.explain import explain as explain_sql
 
+# Storleksgränser på request-payload. Pydantic returnerar 422 automatiskt om de
+# överskrids — håller bort DoS och oavsiktlig credit-dränering på /explain.
+MAX_SQL_CHARS = 100_000
+MAX_TEXT_CHARS = 100_000
+MAX_MAPPING_ITEMS = 10_000
+
 
 class AnonymizeRequest(BaseModel):
-    sql: str
+    sql: str = Field(..., max_length=MAX_SQL_CHARS)
 
 
 class AnonymizeResponse(BaseModel):
@@ -18,8 +24,8 @@ class AnonymizeResponse(BaseModel):
 
 
 class DeanonymizeRequest(BaseModel):
-    text: str
-    mapping: dict[str, str]
+    text: str = Field(..., max_length=MAX_TEXT_CHARS)
+    mapping: dict[str, str] = Field(..., max_length=MAX_MAPPING_ITEMS)
 
 
 class DeanonymizeResponse(BaseModel):
@@ -27,7 +33,7 @@ class DeanonymizeResponse(BaseModel):
 
 
 class ExplainRequest(BaseModel):
-    sql: str
+    sql: str = Field(..., max_length=MAX_SQL_CHARS)
 
 
 class ExplainResponse(BaseModel):
