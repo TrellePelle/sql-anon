@@ -222,6 +222,50 @@ Varje lager bygger på ett redan fungerande lager under. Affärslogiken kan test
 
 ---
 
+## Uppföljning: luckor i planeringen
+
+Vid två tillfällen har planen kritiskt granskats — först i planeringsfasen ("vad missades?") och senare via säkerhets- och kodkvalitetsgranskningar. Sammanfattningen nedan visar vad som identifierades och vad som adresserades.
+
+### Tester
+
+Originalplanen hade bara två testfiler (`test_anonymize.py`, `test_deanonymize.py`) med happy-path-tester. Saknades: felscenarier (trasig SQL, tom input), tester för `explain.py`, integrationstester för CLI och API, samt tester för config.
+
+**Status:** Åtgärdat innan implementation. Planen byggdes ut till 7 testfiler. Slutläget är 45 tester.
+
+### Säkerhet
+
+Tio luckor identifierades, varav de viktigaste:
+
+1. SQL-litteraler maskeras inte (`WHERE personnummer = '19850101-1234'` läcker)
+2. SQL-kommentarer bevaras
+3. Prompt injection mot Claude
+4. API saknar autentisering — vem som helst kan dränera credits
+5. Mappningsfilen är *känsligare* än originalfrågan
+6. Storleks- och rate-gränser saknas
+7. SQL kan hamna i serverloggar
+
+### Vad som åtgärdats sedan dess
+
+- Storleksgränser på API-payload (PR #2)
+- Felhantering för Anthropic API (PR #3 — adresserade fynd om externa anrop)
+- Mappningsfilens känslighet dokumenterad i README + gitignorerad
+
+### Vad som fortfarande är öppet
+
+- Ingen API-autentisering
+- Ingen rate limiting
+- SQL-litteraler och kommentarer maskeras inte
+- Hårdkodad `dialect="tsql"` — Postgres/MySQL-SQL kan misslyckas tyst
+- Mappningsfilens permissions (multi-user-system)
+- Felmeddelanden kan återge user input i API-responser
+- Inga storleksgränser i CLI (`read_text` utan kontroll)
+
+### Slutsats
+
+Planeringen var bra på *struktur* men tunn på *säkerhet*. Eftertanken kom först när planen kritiserades — och de fynden bär fortfarande projektet framåt på att-göra-listan.
+
+---
+
 ## Del 3: Verifiering — är projektet körbart efter implementationen?
 
 **Ja.** Alla tre kommandon är verifierade både genom automatiska tester och manuell körning mot en riktig miljö.
