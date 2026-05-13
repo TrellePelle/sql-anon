@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sql-anon"
+version = "0.1.0"
+description = "CLI-verktyg för att förklara, anonymisera och avanonymisera SQL-frågor"
+requires-python = ">=3.10"
+authors = [
+    { name = "Per Wagner" },
+]
+dependencies = [
+    "typer>=0.12",
+    "sqlglot>=25.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.30",
+    "anthropic>=0.39",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+]
+
+[project.scripts]
+sql-anon = "sql_anon.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sql_anon"]

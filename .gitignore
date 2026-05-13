@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Miljövariabler
+.env
+
+# Mappningsfiler (innehåller mappning mellan platshållare och riktiga namn — känsligt)
+*.mapping.json
+
+# IDE
+.vscode/
+.idea/
+
+# Tester / cache
+.pytest_cache/
+.coverage
