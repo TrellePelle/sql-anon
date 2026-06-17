@@ -44,21 +44,47 @@ def test_deanonymize_endpoint_unknown_placeholder_returns_400():
 
 def test_explain_endpoint_returns_explanation(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("API_SECRET_KEY", "test-secret")
     with patch("sql_anon.api.anthropic.Anthropic") as mock_cls:
         mock_client = MagicMock()
         mock_client.messages.create.return_value = MagicMock(
             content=[MagicMock(text="En förklaring.")]
         )
         mock_cls.return_value = mock_client
-        response = client.post("/explain", json={"sql": "SELECT 1"})
+        response = client.post(
+            "/explain",
+            json={"sql": "SELECT 1"},
+            headers={"X-API-Key": "test-secret"},
+        )
     assert response.status_code == 200
     assert response.json()["explanation"] == "En förklaring."
 
 
 def test_explain_endpoint_missing_api_key_returns_500(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    response = client.post("/explain", json={"sql": "SELECT 1"})
+    monkeypatch.setenv("API_SECRET_KEY", "test-secret")
+    response = client.post(
+        "/explain",
+        json={"sql": "SELECT 1"},
+        headers={"X-API-Key": "test-secret"},
+    )
     assert response.status_code == 500
+
+
+def test_explain_endpoint_missing_secret_key_returns_401(monkeypatch):
+    monkeypatch.setenv("API_SECRET_KEY", "test-secret")
+    response = client.post("/explain", json={"sql": "SELECT 1"})
+    assert response.status_code == 401
+
+
+def test_explain_endpoint_wrong_secret_key_returns_401(monkeypatch):
+    monkeypatch.setenv("API_SECRET_KEY", "test-secret")
+    response = client.post(
+        "/explain",
+        json={"sql": "SELECT 1"},
+        headers={"X-API-Key": "fel-nyckel"},
+    )
+    assert response.status_code == 401
 
 
 def test_anonymize_endpoint_rejects_oversized_sql():
@@ -67,9 +93,14 @@ def test_anonymize_endpoint_rejects_oversized_sql():
     assert response.status_code == 422
 
 
-def test_explain_endpoint_rejects_oversized_sql():
+def test_explain_endpoint_rejects_oversized_sql(monkeypatch):
+    monkeypatch.setenv("API_SECRET_KEY", "test-secret")
     oversized_sql = "SELECT a FROM b" + "x" * MAX_SQL_CHARS
-    response = client.post("/explain", json={"sql": oversized_sql})
+    response = client.post(
+        "/explain",
+        json={"sql": oversized_sql},
+        headers={"X-API-Key": "test-secret"},
+    )
     assert response.status_code == 422
 
 

@@ -29,11 +29,24 @@ def anonymize(
     sql_file: Path = typer.Argument(
         ..., exists=True, readable=True, help="SQL-fil att anonymisera."
     ),
+    dialect: str = typer.Option(
+        "tsql",
+        help=(
+            "SQL-dialekt att använda vid parsning. Standard: tsql.\n\n"
+            "Vanliga val: tsql (SQL Server), postgres, mysql, bigquery, "
+            "snowflake, redshift, databricks, spark, sqlite.\n\n"
+            "Alla dialekter: athena, bigquery, clickhouse, databricks, doris, "
+            "dremio, drill, druid, duckdb, dune, exasol, fabric, hive, "
+            "materialize, mysql, oracle, postgres, presto, prql, redshift, "
+            "risingwave, snowflake, solr, spark, spark2, sqlite, starrocks, "
+            "tableau, teradata, trino, tsql."
+        ),
+    ),
 ):
     """Anonymisera SQL och spara mappningsfil bredvid originalet."""
     try:
         sql = sql_file.read_text(encoding="utf-8")
-        anonymized, mapping = anonymize_sql(sql)
+        anonymized, mapping = anonymize_sql(sql, dialect=dialect)
     except ValueError as e:
         typer.echo(f"Fel: {e}", err=True)
         raise typer.Exit(code=1)

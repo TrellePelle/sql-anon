@@ -47,3 +47,26 @@ def test_empty_sql_raises_value_error():
 def test_whitespace_only_sql_raises_value_error():
     with pytest.raises(ValueError):
         anonymize("   \n\t  ")
+
+
+def test_string_literal_is_masked():
+    sql, _ = anonymize("SELECT * FROM personal WHERE pnr = '19850101-1234'")
+    assert "19850101-1234" not in sql
+    assert "'***'" in sql
+
+
+def test_numeric_literal_is_masked():
+    sql, _ = anonymize("SELECT * FROM personal WHERE age > 65")
+    assert "65" not in sql
+    assert "0" in sql
+
+
+def test_postgres_dialect_is_accepted():
+    sql, mapping = anonymize("SELECT namn FROM personal", dialect="postgres")
+    assert "tabell_1" in sql
+    assert "personal" in mapping.values()
+
+
+def test_unknown_dialect_raises_value_error():
+    with pytest.raises(ValueError, match="Okänd SQL-dialekt"):
+        anonymize("SELECT 1", dialect="finnsinte")

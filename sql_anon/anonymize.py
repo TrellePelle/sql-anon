@@ -1,27 +1,41 @@
 import sqlglot
 from sqlglot import exp
 
+SUPPORTED_DIALECTS = sorted(
+    k.lower()
+    for k in sqlglot.dialects.Dialects.__members__.keys()
+    if k != "DIALECT"
+)
 
-def anonymize(sql: str) -> tuple[str, dict[str, str]]:
+
+def anonymize(sql: str, dialect: str = "tsql") -> tuple[str, dict[str, str]]:
     """Anonymisera en SQL-fråga genom att ersätta tabell-, kolumn- och aliasnamn.
 
     Mappningen är deterministisk: samma originalnamn ger alltid samma platshållare
     inom samma fråga, och samma indata ger alltid samma utdata.
 
     Args:
-        sql: SQL-fråga att anonymisera (förväntas vara T-SQL).
+        sql: SQL-fråga att anonymisera.
+        dialect: SQL-dialekt att använda vid parsning och generering (standard: tsql).
 
     Returns:
         Tuple med (anonymiserad SQL, mappning från platshållare till originalnamn).
 
     Raises:
-        ValueError: Om SQL-strängen är tom, bara whitespace eller inte går att parsa.
+        ValueError: Om SQL-strängen är tom, bara whitespace, dialect är okänd,
+                    eller SQL inte går att parsa.
     """
     if not sql or not sql.strip():
         raise ValueError("SQL-strängen är tom.")
 
+    if dialect not in SUPPORTED_DIALECTS:
+        raise ValueError(
+            f"Okänd SQL-dialekt: '{dialect}'. "
+            f"Tillgängliga dialekter: {', '.join(SUPPORTED_DIALECTS)}"
+        )
+
     try:
-        tree = sqlglot.parse_one(sql, dialect="tsql")
+        tree = sqlglot.parse_one(sql, dialect=dialect)
     except sqlglot.errors.ParseError as e:
         raise ValueError(f"Kunde inte parsa SQL: {e}") from e
 
@@ -65,4 +79,11 @@ def anonymize(sql: str) -> tuple[str, dict[str, str]]:
             elif table_key in lookup:
                 c.set("table", exp.to_identifier(lookup[table_key]))
 
-    return tree.sql(dialect="tsql"), mapping
+    # Pass 4: literaler — maskeras utan mappning eftersom de kan innehålla PII
+    for lit in tree.find_all(exp.Literal):
+        if lit.is_string:
+            lit.set("this", "***")
+        else:
+            lit.set("this", "0")
+
+    return tree.sql(dialect=dialect), mapping

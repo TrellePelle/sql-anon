@@ -18,6 +18,7 @@ dependencies = [
     "uvicorn>=0.30",
     "anthropic>=0.39",
     "python-dotenv>=1.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
