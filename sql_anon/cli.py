@@ -6,7 +6,7 @@ import typer
 from dotenv import load_dotenv
 
 from sql_anon.anonymize import anonymize as anonymize_sql
-from sql_anon.config import get_api_key
+from sql_anon.config import get_api_key, get_claude_model, get_claude_max_tokens, get_file_encoding
 from sql_anon.deanonymize import deanonymize as deanonymize_text
 from sql_anon.explain import explain as explain_sql
 
@@ -16,12 +16,63 @@ from sql_anon.explain import explain as explain_sql
 # fortfarande bara från os.environ och vet inget om filen.
 load_dotenv()
 
+MAX_FILE_BYTES = 10_000_000  # 10 MB
+
 app = typer.Typer(help="Förklara, anonymisera och avanonymisera SQL-frågor.")
 
 
 def _mapping_path_for(sql_path: Path) -> Path:
     """Returnerar sökvägen till mappningsfilen bredvid SQL-filen."""
     return sql_path.with_suffix(sql_path.suffix + ".mapping.json")
+
+
+def _read_file(path: Path) -> str:
+    """Läs textfil med felhantering för storlek, encoding och läsrättigheter."""
+    try:
+        if path.stat().st_size > MAX_FILE_BYTES:
+            raise ValueError(f"Filen är för stor (max {MAX_FILE_BYTES // 1_000_000} MB).")
+    except OSError as e:
+        typer.echo(f"Fel: Kunde inte läsa filinformation för '{path}': {e}", err=True)
+        raise typer.Exit(code=1)
+
+    encoding = get_file_encoding()
+    try:
+        return path.read_text(encoding=encoding)
+    except UnicodeDecodeError:
+        typer.echo(
+            f"Fel: Kunde inte läsa '{path}' som {encoding}. "
+            "Ange en annan kodning via miljövariabeln FILE_ENCODING.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    except OSError as e:
+        typer.echo(f"Fel: Kunde inte läsa '{path}': {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+def _read_mapping(path: Path) -> dict[str, str]:
+    """Läs och validera en JSON-mappningsfil."""
+    raw = _read_file(path)
+    try:
+        mapping = json.loads(raw)
+    except json.JSONDecodeError as e:
+        typer.echo(f"Fel: Mappningsfilen är inte giltig JSON: {e}", err=True)
+        raise typer.Exit(code=1)
+
+    if not isinstance(mapping, dict):
+        typer.echo("Fel: Mappningsfilen måste vara ett JSON-objekt.", err=True)
+        raise typer.Exit(code=1)
+
+    invalid = {k: v for k, v in mapping.items() if not isinstance(k, str) or not isinstance(v, str)}
+    if invalid:
+        typer.echo(
+            f"Fel: Mappningsfilen innehåller ogiltiga värden (alla nycklar och värden måste vara strängar): "
+            f"{list(invalid.keys())[:5]}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    return mapping
 
 
 @app.command()
@@ -44,18 +95,22 @@ def anonymize(
     ),
 ):
     """Anonymisera SQL och spara mappningsfil bredvid originalet."""
+    sql = _read_file(sql_file)
     try:
-        sql = sql_file.read_text(encoding="utf-8")
         anonymized, mapping = anonymize_sql(sql, dialect=dialect)
     except ValueError as e:
         typer.echo(f"Fel: {e}", err=True)
         raise typer.Exit(code=1)
 
     mapping_path = _mapping_path_for(sql_file)
-    mapping_path.write_text(
-        json.dumps(mapping, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    try:
+        mapping_path.write_text(
+            json.dumps(mapping, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        typer.echo(f"Fel: Kunde inte skriva mappningsfilen '{mapping_path}': {e}", err=True)
+        raise typer.Exit(code=1)
 
     typer.echo(anonymized)
     typer.echo(f"Mappning sparad till: {mapping_path}", err=True)
@@ -71,11 +126,12 @@ def deanonymize(
     ),
 ):
     """Avanonymisera text genom att byta tillbaka platshållare."""
+    text = _read_file(text_file)
+    mapping = _read_mapping(mapping_file)
+
     try:
-        text = text_file.read_text(encoding="utf-8")
-        mapping = json.loads(mapping_file.read_text(encoding="utf-8"))
         result = deanonymize_text(text, mapping)
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         typer.echo(f"Fel: {e}", err=True)
         raise typer.Exit(code=1)
 
@@ -89,11 +145,11 @@ def explain(
     ),
 ):
     """Förklara SQL-fråga på svenska via Claude API."""
+    sql = _read_file(sql_file)
     try:
         api_key = get_api_key()
-        sql = sql_file.read_text(encoding="utf-8")
         client = anthropic.Anthropic(api_key=api_key)
-        result = explain_sql(sql, client)
+        result = explain_sql(sql, client, model=get_claude_model(), max_tokens=get_claude_max_tokens())
     except (ValueError, RuntimeError) as e:
         typer.echo(f"Fel: {e}", err=True)
         raise typer.Exit(code=1)

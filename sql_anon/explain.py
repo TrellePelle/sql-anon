@@ -45,6 +45,8 @@ def explain(
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": sql}],
         )
+    # Specifika undantagstyper fångas före den generiska APIStatusError/APIError
+    # för att ge användaren ett begripligt felmeddelande per feltyp.
     except anthropic.AuthenticationError as e:
         raise RuntimeError(
             "Anthropic API avvisade nyckeln (autentiseringsfel). "

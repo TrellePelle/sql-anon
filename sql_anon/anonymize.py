@@ -11,12 +11,17 @@ SUPPORTED_DIALECTS = sorted(
 def anonymize(sql: str, dialect: str = "tsql") -> tuple[str, dict[str, str]]:
     """Anonymisera en SQL-fråga genom att ersätta tabell-, kolumn- och aliasnamn.
 
-    Mappningen är deterministisk: samma originalnamn ger alltid samma platshållare
-    inom samma fråga, och samma indata ger alltid samma utdata.
+    Determinismen garanteras av att samma originalnamn (case-insensitivt) alltid
+    får samma räknarvärde inom en fråga. Väl-testade dialekter: tsql, postgres.
+
+    Literaler maskeras utan mappning: strängar blir '***' och tal blir 0,
+    för att förhindra att PII läcker i den anonymiserade outputen.
 
     Args:
         sql: SQL-fråga att anonymisera.
         dialect: SQL-dialekt att använda vid parsning och generering (standard: tsql).
+            Väl-testade val: tsql (SQL Server), postgres. Övriga dialekter från
+            sqlglot stöds men är mindre testade.
 
     Returns:
         Tuple med (anonymiserad SQL, mappning från platshållare till originalnamn).
@@ -37,12 +42,17 @@ def anonymize(sql: str, dialect: str = "tsql") -> tuple[str, dict[str, str]]:
     try:
         tree = sqlglot.parse_one(sql, dialect=dialect)
     except sqlglot.errors.ParseError as e:
-        raise ValueError(f"Kunde inte parsa SQL: {e}") from e
+        # sqlglot inkluderar radnummer och position i felbeskrivningen
+        raise ValueError(
+            f"Kunde inte parsa SQL ({dialect}): {e}. "
+            "Kontrollera att rätt dialekt är vald och att syntaxen är giltig."
+        ) from e
 
     if tree is None:
         raise ValueError("SQL-strängen kunde inte parsas till ett uttryck.")
 
     mapping: dict[str, str] = {}
+    # Lowercase-nyckel för case-insensitiv lookup — "Tabell" och "tabell" får samma platshållare
     lookup: dict[tuple[str, str], str] = {}
     counters = {"tabell": 0, "kolumn": 0, "alias": 0}
 

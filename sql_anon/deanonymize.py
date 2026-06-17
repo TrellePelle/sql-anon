@@ -12,14 +12,18 @@ def deanonymize(text: str, mapping: dict[str, str]) -> str:
     Args:
         text: Text som innehåller platshållare av formen ``tabell_N``,
             ``kolumn_N`` eller ``alias_N``.
-        mapping: Mappning från platshållare till originalnamn.
+        mapping: Mappning från platshållare till originalnamn. Får inte vara None.
 
     Returns:
         Texten med alla platshållare ersatta av sina originalnamn.
 
     Raises:
-        ValueError: Om texten innehåller platshållare som inte finns i mappningen.
+        ValueError: Om mapping är None, eller om texten innehåller platshållare
+            som inte finns i mappningen.
     """
+    if mapping is None:
+        raise ValueError("Mappningen kan inte vara None.")
+
     unknown: list[str] = []
 
     def replace(match: re.Match[str]) -> str:

@@ -7,7 +7,14 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from sql_anon.anonymize import anonymize as anonymize_sql
-from sql_anon.config import get_api_key, get_secret_key
+from sql_anon.config import (
+    get_api_key,
+    get_claude_max_tokens,
+    get_claude_model,
+    get_rate_limit_default,
+    get_rate_limit_explain,
+    get_secret_key,
+)
 from sql_anon.deanonymize import deanonymize as deanonymize_text
 from sql_anon.explain import explain as explain_sql
 
@@ -42,8 +49,8 @@ class AnonymizeRequest(BaseModel):
         "tsql",
         description=(
             "SQL-dialekt att använda vid parsning och generering. Standard: tsql. "
-            "Vanliga val: tsql (SQL Server), postgres, mysql, bigquery, snowflake, "
-            "redshift, databricks, spark, sqlite. "
+            "Väl-testade val: tsql (SQL Server), postgres. "
+            "Vanliga val: mysql, bigquery, snowflake, redshift, databricks, spark, sqlite. "
             "Alla dialekter: athena, bigquery, clickhouse, databricks, doris, dremio, "
             "drill, druid, duckdb, dune, exasol, fabric, hive, materialize, mysql, "
             "oracle, postgres, presto, prql, redshift, risingwave, snowflake, solr, "
@@ -75,7 +82,7 @@ class ExplainResponse(BaseModel):
 
 
 @app.post("/anonymize", response_model=AnonymizeResponse)
-@limiter.limit("30/minute")
+@limiter.limit(get_rate_limit_default())
 def anonymize_endpoint(req: AnonymizeRequest, request: Request) -> AnonymizeResponse:
     try:
         anonymized, mapping = anonymize_sql(req.sql, dialect=req.dialect)
@@ -85,7 +92,7 @@ def anonymize_endpoint(req: AnonymizeRequest, request: Request) -> AnonymizeResp
 
 
 @app.post("/deanonymize", response_model=DeanonymizeResponse)
-@limiter.limit("30/minute")
+@limiter.limit(get_rate_limit_default())
 def deanonymize_endpoint(req: DeanonymizeRequest, request: Request) -> DeanonymizeResponse:
     try:
         result = deanonymize_text(req.text, req.mapping)
@@ -95,12 +102,12 @@ def deanonymize_endpoint(req: DeanonymizeRequest, request: Request) -> Deanonymi
 
 
 @app.post("/explain", response_model=ExplainResponse, dependencies=[Depends(verify_secret_key)])
-@limiter.limit("10/minute")
+@limiter.limit(get_rate_limit_explain())
 def explain_endpoint(req: ExplainRequest, request: Request) -> ExplainResponse:
     try:
         api_key = get_api_key()
         client = anthropic.Anthropic(api_key=api_key)
-        result = explain_sql(req.sql, client)
+        result = explain_sql(req.sql, client, model=get_claude_model(), max_tokens=get_claude_max_tokens())
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
