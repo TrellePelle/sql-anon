@@ -23,3 +23,7 @@ venv/
 # Tester / cache
 .pytest_cache/
 .coverage
+
+# Lokala testfiler
+svar.txt
+test.sql

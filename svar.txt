@@ -1,7 +1,0 @@
-SELECT alias_1.kolumn_1, SUM(alias_2.kolumn_2) AS total
-FROM tabell_1 AS alias_1
-JOIN tabell_2 AS alias_2 ON alias_2.kolumn_3 = alias_1.kolumn_4
-WHERE alias_2.kolumn_5 >= '2025-01-01'
-    AND alias_2.kolumn_5 <= '2025-12-31'
-GROUP BY alias_1.kolumn_1
-ORDER BY kolumn_6 DESC
