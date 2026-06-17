@@ -2,40 +2,26 @@
 
 [![CI](https://github.com/TrellePelle/sql-anon/actions/workflows/ci.yml/badge.svg)](https://github.com/TrellePelle/sql-anon/actions/workflows/ci.yml)
 
-CLI-verktyg och REST API för att **förklara**, **anonymisera** och **avanonymisera** SQL-frågor.
+CLI-verktyg och REST API för lokal SQL-anonymisering — dela känsliga SQL-frågor med externa konsulter utan att affärskritisk information läcker.
 
-Användbart när du behöver dela en SQL-fråga med en extern konsult eller support, men tabell- och kolumnnamnen innehåller känslig affärsinformation. Frågan anonymiseras **helt lokalt** — ingen SQL-data skickas till tredje part i anonymiserings- eller avanonymiseringssteget.
-
-**Live API:** https://sql-anon-production.up.railway.app/docs
+**Live:** https://sql-anon-production.up.railway.app/docs
 
 ---
 
-## Vad det löser
+## Vad det gör
 
-Inom BI och datalagerarbete behöver man ibland skicka SQL-frågor till externa konsulter eller support. Tabellnamn och kolumnnamn kan då innehålla känslig affärsinformation. Det finns inget enkelt verktyg för att anonymisera och sedan avanonymisera sådana frågor — förrän nu.
-
-**Flödet:**
-1. Anonymisera SQL lokalt → dela den anonymiserade versionen
-2. Ta emot svar med platshållare från konsulten
-3. Avanonymisera svaret lokalt → få tillbaka originalnamnen
+Anonymiserar SQL-frågor helt lokalt genom att ersätta tabell-, kolumn- och aliasnamn med generiska platshållare (`tabell_1`, `kolumn_1`). Strängliteraler och tal maskeras så att PII inte läcker. En mappningsfil sparas lokalt och används sedan för att byta tillbaka originalnamnen när konsultens svar kommer. Stöder 31 SQL-dialekter inklusive T-SQL, PostgreSQL, MySQL, BigQuery och Snowflake.
 
 ---
 
-## Funktioner
+## Kom igång
 
-| Kommando | Vad det gör |
-|---|---|
-| `anonymize` | Ersätter tabell-, kolumn- och aliasnamn med platshållare (`tabell_1`, `kolumn_1`). Strängliteraler blir `'***'`, tal blir `0`. Sparar en mappningsfil. |
-| `deanonymize` | Tar ett svar med platshållare och byter tillbaka till originalnamnen via mappningsfilen. |
-| `explain` | Förklarar en SQL-fråga på svenska via Claude API. |
+### Krav
 
-Stöder 31 SQL-dialekter via sqlglot: `tsql`, `postgres`, `mysql`, `bigquery`, `snowflake`, `redshift`, `databricks`, `spark`, `sqlite` m.fl.
+- Python 3.10+
+- Anthropic API-nyckel (krävs bara för `explain`-kommandot)
 
----
-
-## Installation
-
-Kräver Python 3.10+.
+### Installation
 
 ```bash
 git clone https://github.com/TrellePelle/sql-anon.git
@@ -46,32 +32,32 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
----
+### Konfiguration
 
-## Konfiguration
-
-Skapa en `.env`-fil i projektroten (se `.env.example` för alla alternativ):
+Skapa en `.env`-fil i projektets rot:
 
 ```env
-# Krävs för explain-kommandot
 ANTHROPIC_API_KEY=sk-ant-din-nyckel
-
-# Krävs för /explain-endpointen i API:t
 API_SECRET_KEY=din-hemliga-nyckel
-
-# Valfritt — standardvärden visas
-CLAUDE_MODEL=claude-sonnet-4-5
-CLAUDE_MAX_TOKENS=1024
-FILE_ENCODING=utf-8
-RATE_LIMIT_DEFAULT=30/minute
-RATE_LIMIT_EXPLAIN=10/minute
 ```
 
-`.env`-filen läses automatiskt och är gitignorerad. Skaffa Anthropic-nyckel på [console.anthropic.com](https://console.anthropic.com).
+Alla tillgängliga variabler finns listade i `.env.example`.
+
+### Kör projektet
+
+```bash
+# CLI
+sql-anon anonymize query.sql
+sql-anon deanonymize svar.txt query.sql.mapping.json
+sql-anon explain query.sql
+
+# API lokalt
+uvicorn sql_anon.api:app --reload
+```
 
 ---
 
-## Användning — CLI
+## Användning
 
 ### Anonymisera
 
@@ -98,25 +84,11 @@ FROM tabell_1 AS alias_1
 WHERE alias_1.kolumn_3 = '***' AND alias_1.kolumn_4 > 0
 ```
 
-Mappningsfil (`query.sql.mapping.json`):
-```json
-{
-  "alias_1": "p",
-  "kolumn_1": "personnummer",
-  "kolumn_2": "fornamn",
-  "tabell_1": "personal",
-  "kolumn_3": "avdelning",
-  "kolumn_4": "lon"
-}
-```
-
 ### Avanonymisera
 
 ```bash
 sql-anon deanonymize svar.txt query.sql.mapping.json
 ```
-
-Byter tillbaka alla platshållare i `svar.txt` mot originalnamnen.
 
 ### Förklara
 
@@ -124,19 +96,7 @@ Byter tillbaka alla platshållare i `svar.txt` mot originalnamnen.
 sql-anon explain query.sql
 ```
 
-Skickar SQL till Claude och returnerar en förklaring på svenska.
-
----
-
-## Användning — API
-
-Starta servern lokalt:
-
-```bash
-uvicorn sql_anon.api:app --reload
-```
-
-Swagger-dokumentation finns på `http://127.0.0.1:8000/docs` (eller live på https://sql-anon-production.up.railway.app/docs).
+### API
 
 | Endpoint | Autentisering | Body | Respons |
 |---|---|---|---|
@@ -148,49 +108,48 @@ Rate limiting: 30 req/min för anonymize/deanonymize, 10 req/min för explain.
 
 ---
 
-## Säkerhet
+## Arkitektur
 
-- **Anonymisering sker lokalt.** Ingen SQL skickas till externa tjänster i anonymiserings- eller avanonymiseringssteget.
-- **Mappningsfilen är känslig.** Den innehåller kopplingen mellan platshållare och originalnamn. `*.mapping.json` är gitignorerad som standard — förvara den säkert.
-- **`/explain` kräver API-nyckel.** Sätt `X-API-Key`-headern med värdet från `API_SECRET_KEY`.
-- **SQL-kommentarer bevaras.** Strippa kommentarer manuellt om de innehåller känslig information.
-
----
-
-## Utveckling
-
-```bash
-# Kör tester
-pytest
-
-# Kör API lokalt med auto-reload
-uvicorn sql_anon.api:app --reload
-```
-
-Projektstruktur:
+CLI och API är tunna I/O-lager. All affärslogik finns i egna moduler som tar och returnerar strängar — inga beroenden till filsystem eller HTTP i affärslogiken. Mappningsfilen är deterministisk: samma SQL ger alltid samma platshållare, vilket gör avanonymisering förutsägbar.
 
 ```
 sql-anon/
 ├── sql_anon/
-│   ├── cli.py          # Typer CLI-entry point
-│   ├── api.py          # FastAPI-app med rate limiting och autentisering
-│   ├── anonymize.py    # Lokal SQL-anonymisering via sqlglot
-│   ├── deanonymize.py  # Avanonymisering via mappningsfil
+│   ├── cli.py          # Typer CLI — läser filer, anropar affärslogik
+│   ├── api.py          # FastAPI — rate limiting, autentisering, routing
+│   ├── anonymize.py    # Lokal SQL-anonymisering via sqlglot AST-traversering
+│   ├── deanonymize.py  # Avanonymisering via regex och mappningsfil
 │   ├── explain.py      # Förklarar SQL via Claude API
-│   └── config.py       # Konfiguration från miljövariabler
+│   └── config.py       # Konfiguration från miljövariabler med fallbacks
 └── tests/              # 56 tester
 ```
 
 ---
 
-## Teknikstack
+## Teknisk stack
 
-| Komponent | Val | Motivering |
+| Komponent | Val | Anledning |
 |---|---|---|
 | Språk | Python 3.10+ | Brett ekosystem, bra SQL-parsers |
-| CLI | [Typer](https://typer.tiangolo.com/) | Modernt, typsäkert CLI |
-| SQL-parsning | [sqlglot](https://sqlglot.com/) | Lokal parser, stöder 31 dialekter inklusive T-SQL |
-| API | [FastAPI](https://fastapi.tiangolo.com/) | Snabbt, automatisk Swagger-dokumentation |
-| Rate limiting | [slowapi](https://github.com/laurentS/slowapi) | In-memory rate limiting för FastAPI |
-| AI-förklaring | [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) | Claude API — bara för explain, ingen SQL-data läcker |
-| Deploy | [Railway](https://railway.app/) | Automatisk deploy från GitHub |
+| CLI | Typer | Modernt, typsäkert CLI med automatiska hjälptexter |
+| SQL-parsning | sqlglot | Lokal parser, stöder 31 dialekter inklusive T-SQL |
+| API | FastAPI | Snabbt, automatisk Swagger-dokumentation |
+| Rate limiting | slowapi | In-memory rate limiting för FastAPI |
+| AI-förklaring | Anthropic SDK | Claude API — bara för explain, ingen SQL-data läcker |
+| Deploy | Railway | Automatisk deploy från GitHub |
+| CI | GitHub Actions | Kör 56 tester vid varje push |
+
+---
+
+## Begränsningar
+
+- **SQL-kommentarer bevaras.** Kommentarer i SQL-koden anonymiseras inte — strippa dem manuellt om de innehåller känslig information.
+- **Mappningsfilen är känslig.** Den innehåller kopplingen mellan platshållare och originalnamn. Läcker den försvinner hela poängen med anonymiseringen. Filen är gitignorerad men du ansvarar för att förvara den säkert.
+- **In-memory rate limiting.** Nollställs vid omstart och fungerar inte bakom en load balancer med flera instanser.
+- **Inte testat mot alla 31 dialekter.** Väl-testade dialekter är `tsql` och `postgres`. Övriga dialekter stöds via sqlglot men kan ge oväntad output för kantfall.
+
+---
+
+## Utvecklat med
+
+[Claude Code](https://claude.ai/code) (agentdriven utveckling) som del av kursen *Next-Generation Software Development with AI*.
